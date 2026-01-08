@@ -1,0 +1,32 @@
+@page "/payment/cancel/{SessionId:guid}"
+@inject NavigationManager Navigation
+
+<PageTitle>Payment Cancelled</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10 text-center">
+    <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Warning" Size="Size.Large" Style="font-size: 80px;" />
+
+    <MudText Typo="Typo.h3" Color="Color.Warning" Class="mt-4" GutterBottom="true">
+        Payment Cancelled
+    </MudText>
+
+    <MudText Typo="Typo.body1" Class="mt-4 mb-6">
+        Your payment was cancelled. You can try again anytime to unlock your full archetype report.
+    </MudText>
+
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               Size="Size.Large"
+               OnClick="@(() => Navigation.NavigateTo($"/results/{SessionId}"))">
+        Return to Results
+    </MudButton>
+
+    <MudText Typo="Typo.caption" Class="mt-4" Style="color: #666;">
+        Your free results are still available
+    </MudText>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public Guid SessionId { get; set; }
+}

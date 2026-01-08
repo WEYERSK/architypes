@@ -1,0 +1,294 @@
+@page "/results/{SessionId:guid}"
+@using Microsoft.Extensions.Options
+@inject IAssessmentService AssessmentService
+@inject NavigationManager Navigation
+@inject IOptions<PricingSettings> PricingSettings
+
+<PageTitle>Your Archetype Results</PageTitle>
+
+@if (isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10 text-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText Typo="Typo.h6" Class="mt-4">Calculating your results...</MudText>
+    </MudContainer>
+}
+else if (assessment == null || assessment.Result == null)
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10">
+        <MudAlert Severity="Severity.Error">Unable to load results. Please try again.</MudAlert>
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+        @* Free Result: Top Archetype Only *@
+        <MudPaper Elevation="3" Class="pa-8 mb-6">
+            <MudText Typo="Typo.h3" Color="Color.Primary" Align="Align.Center" GutterBottom="true">
+                Your Primary Archetype
+            </MudText>
+
+            <MudText Typo="Typo.h2" Align="Align.Center" Class="my-6" Style="font-weight: 600;">
+                @primaryArchetypeName
+            </MudText>
+
+            <MudDivider Class="my-6" />
+
+            <MudText Typo="Typo.body1" Class="mb-4" Style="line-height: 1.8;">
+                @primaryArchetype?.FreeTeaser
+            </MudText>
+
+            <MudText Typo="Typo.body2" Style="color: #666; font-style: italic;">
+                Core Drive: @primaryArchetype?.CoreDrive
+            </MudText>
+        </MudPaper>
+
+        @if (!assessment.HasPurchasedFullReport)
+        {
+            @* Paywall *@
+            <MudPaper Elevation="3" Class="pa-8" Style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <MudGrid>
+                    <MudItem xs="12" md="8">
+                        <MudText Typo="Typo.h4" GutterBottom="true">Unlock Your Full Archetype Profile</MudText>
+
+                        <MudText Typo="Typo.body1" Class="mb-4">
+                            Get instant access to your complete analysis including:
+                        </MudText>
+
+                        <MudStack Spacing="2">
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                <MudText>Full ranking of all 12 archetypes with scores</MudText>
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                <MudText>Primary, Secondary, and Shadow archetype analysis</MudText>
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                <MudText>Detailed strengths and blindspots for each archetype</MudText>
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                <MudText>How your archetypes interact with each other</MudText>
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                <MudText>Business applications and career insights</MudText>
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                <MudText>Professional PDF report for download</MudText>
+                            </MudStack>
+                        </MudStack>
+                    </MudItem>
+
+                    <MudItem xs="12" md="4" Style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                        <MudText Typo="Typo.h3" Class="mb-4">@PricingSettings.Value.Currency R@PricingSettings.Value.FullReportPrice</MudText>
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Success"
+                                   Size="Size.Large"
+                                   FullWidth="true"
+                                   OnClick="ProceedToPayment"
+                                   Style="background-color: white; color: #667eea; font-weight: 600;">
+                            Unlock Full Report Now
+                        </MudButton>
+
+                        <MudText Typo="Typo.caption" Class="mt-2">Secure payment via PayFast</MudText>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+        else
+        {
+            @* Paid Results: Full Analysis *@
+            <MudPaper Elevation="3" Class="pa-8 mb-6">
+                <MudText Typo="Typo.h4" GutterBottom="true">Your Complete Archetype Profile</MudText>
+
+                @* Full Rankings *@
+                <MudText Typo="Typo.h5" Class="mt-6 mb-4">All 12 Archetypes Ranked</MudText>
+
+                <MudTable Items="@archetypeScores" Dense="true" Hover="true" Bordered="true" Striped="true">
+                    <HeaderContent>
+                        <MudTh>Rank</MudTh>
+                        <MudTh>Archetype</MudTh>
+                        <MudTh>Score</MudTh>
+                        <MudTh>Strength</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Rank</MudTd>
+                        <MudTd>
+                            <strong>@context.DisplayName</strong>
+                        </MudTd>
+                        <MudTd>@context.AverageScore.ToString("F2")</MudTd>
+                        <MudTd>
+                            <MudProgressLinear Color="@GetColorForRank(context.Rank)" Value="@(context.AverageScore * 20)" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                @* Primary/Secondary/Shadow Analysis *@
+                <MudDivider Class="my-6" />
+
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudCard Elevation="2" Class="pa-4" Style="background: #e3f2fd;">
+                            <MudCardContent>
+                                <MudText Typo="Typo.h6" Color="Color.Primary" GutterBottom="true">Primary Archetype</MudText>
+                                <MudText Typo="Typo.h5">@primaryArchetypeName</MudText>
+                                <MudText Typo="Typo.body2" Class="mt-2">@primaryArchetype?.CoreDrive</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    @if (secondaryArchetype != null)
+                    {
+                        <MudItem xs="12" md="4">
+                            <MudCard Elevation="2" Class="pa-4" Style="background: #f3e5f5;">
+                                <MudCardContent>
+                                    <MudText Typo="Typo.h6" Color="Color.Secondary" GutterBottom="true">Secondary Archetype</MudText>
+                                    <MudText Typo="Typo.h5">@secondaryArchetypeName</MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-2">@secondaryArchetype.CoreDrive</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+
+                    @if (shadowArchetype != null)
+                    {
+                        <MudItem xs="12" md="4">
+                            <MudCard Elevation="2" Class="pa-4" Style="background: #fff3e0;">
+                                <MudCardContent>
+                                    <MudText Typo="Typo.h6" Color="Color.Warning" GutterBottom="true">Shadow / Growth Area</MudText>
+                                    <MudText Typo="Typo.h5">@shadowArchetypeName</MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-2">Your least expressed archetype</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+
+                @* Detailed Analysis *@
+                <MudDivider Class="my-6" />
+
+                <MudExpansionPanels MultiExpansion="true">
+                    @if (primaryArchetype != null)
+                    {
+                        <MudExpansionPanel Text="@($"Primary: {primaryArchetypeName} - Detailed Analysis")" IsInitiallyExpanded="true">
+                            <MudText Typo="Typo.body1" Class="mb-3">@primaryArchetype.DetailedCharacteristics</MudText>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Success">Strengths:</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-3">@primaryArchetype.Strengths</MudText>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Warning">Blindspots:</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-3">@primaryArchetype.Blindspots</MudText>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Info">In Business:</MudText>
+                            <MudText Typo="Typo.body2">@primaryArchetype.InBusiness</MudText>
+                        </MudExpansionPanel>
+                    }
+
+                    @if (secondaryArchetype != null)
+                    {
+                        <MudExpansionPanel Text="@($"Secondary: {secondaryArchetypeName} - Detailed Analysis")">
+                            <MudText Typo="Typo.body1" Class="mb-3">@secondaryArchetype.DetailedCharacteristics</MudText>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Success">Strengths:</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-3">@secondaryArchetype.Strengths</MudText>
+                            <MudText Typo="Typo.subtitle2" Color="Color.Warning">Blindspots:</MudText>
+                            <MudText Typo="Typo.body2">@secondaryArchetype.Blindspots</MudText>
+                        </MudExpansionPanel>
+                    }
+
+                    @if (shadowArchetype != null)
+                    {
+                        <MudExpansionPanel Text="@($"Shadow: {shadowArchetypeName} - Growth Opportunities")">
+                            <MudText Typo="Typo.body2" Class="mb-3">
+                                This archetype represents your least expressed pattern. Developing this archetype can provide balance and open new possibilities.
+                            </MudText>
+                            <MudText Typo="Typo.body1">@shadowArchetype.DetailedCharacteristics</MudText>
+                        </MudExpansionPanel>
+                    }
+                </MudExpansionPanels>
+
+                @* PDF Download *@
+                <MudDivider Class="my-6" />
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="DownloadPDF">
+                    Download Full Report (PDF)
+                </MudButton>
+            </MudPaper>
+        }
+    </MudContainer>
+}
+
+@code {
+    [Parameter]
+    public Guid SessionId { get; set; }
+
+    private Architypes.Core.Entities.Assessment? assessment;
+    private Archetype? primaryArchetype;
+    private Archetype? secondaryArchetype;
+    private Archetype? shadowArchetype;
+    private List<Architypes.Application.Models.ArchetypeScore> archetypeScores = new();
+
+    private bool isLoading = true;
+
+    private string primaryArchetypeName => assessment?.Gender == Gender.Male ? primaryArchetype?.MaleName ?? "" : primaryArchetype?.FemaleName ?? "";
+    private string secondaryArchetypeName => assessment?.Gender == Gender.Male ? secondaryArchetype?.MaleName ?? "" : secondaryArchetype?.FemaleName ?? "";
+    private string shadowArchetypeName => assessment?.Gender == Gender.Male ? shadowArchetype?.MaleName ?? "" : shadowArchetype?.FemaleName ?? "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            assessment = await AssessmentService.GetAssessmentBySessionIdAsync(SessionId);
+
+            if (assessment == null || assessment.Result == null)
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            primaryArchetype = assessment.Result.PrimaryArchetype;
+            secondaryArchetype = assessment.Result.SecondaryArchetype;
+            shadowArchetype = assessment.Result.ShadowArchetype;
+
+            if (assessment.HasPurchasedFullReport)
+            {
+                archetypeScores = await AssessmentService.GetArchetypeScoresAsync(assessment.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading results: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ProceedToPayment()
+    {
+        Navigation.NavigateTo($"/payment/{SessionId}");
+    }
+
+    private void DownloadPDF()
+    {
+        Navigation.NavigateTo($"/download-report/{SessionId}", forceLoad: true);
+    }
+
+    private Color GetColorForRank(int rank)
+    {
+        return rank switch
+        {
+            1 => Color.Success,
+            2 => Color.Info,
+            3 => Color.Primary,
+            _ when rank <= 6 => Color.Default,
+            _ => Color.Warning
+        };
+    }
+}

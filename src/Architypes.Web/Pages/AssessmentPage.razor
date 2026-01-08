@@ -1,0 +1,191 @@
+@page "/assessment/{SessionId:guid}"
+@inject IAssessmentService AssessmentService
+@inject NavigationManager Navigation
+
+<PageTitle>Archetype Assessment</PageTitle>
+
+@if (isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10 text-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText Typo="Typo.h6" Class="mt-4">Loading assessment...</MudText>
+    </MudContainer>
+}
+else if (questions == null || questions.Count == 0)
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10">
+        <MudAlert Severity="Severity.Error">Failed to load assessment questions. Please try again.</MudAlert>
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+        <MudPaper Elevation="3" Class="pa-6">
+            <MudText Typo="Typo.h4" GutterBottom="true">Archetype Assessment</MudText>
+
+            <MudProgressLinear Color="Color.Primary" Value="@progressPercentage" Class="my-4" />
+            <MudText Typo="Typo.body2" Class="mb-6" Style="color: #666;">
+                Question @(answeredCount + 1) of @questions.Count • @progressPercentage% complete
+            </MudText>
+
+            <MudText Typo="Typo.body1" Class="mb-4" Style="font-style: italic; color: #555;">
+                Rate each statement from 1 (Strongly Disagree) to 5 (Strongly Agree)
+            </MudText>
+
+            @foreach (var question in questions)
+            {
+                var answer = answers.FirstOrDefault(a => a.QuestionId == question.Id);
+                var currentRating = answer?.Rating ?? 0;
+
+                <MudCard Elevation="1" Class="mb-4">
+                    <MudCardContent>
+                        <MudText Typo="Typo.body1" Class="mb-3">@question.Text</MudText>
+
+                        <MudRating Size="Size.Large"
+                                   SelectedValue="@currentRating"
+                                   SelectedValueChanged="@((int newRating) => OnRatingChanged(question.Id, newRating))"
+                                   MaxValue="5" />
+
+                        <MudGrid Class="mt-2">
+                            <MudItem xs="6">
+                                <MudText Typo="Typo.caption" Style="color: #999;">Strongly Disagree</MudText>
+                            </MudItem>
+                            <MudItem xs="6" Style="text-align: right;">
+                                <MudText Typo="Typo.caption" Style="color: #999;">Strongly Agree</MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            }
+
+            <MudDivider Class="my-6" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       FullWidth="true"
+                       Disabled="@(!allQuestionsAnswered)"
+                       OnClick="SubmitAssessment">
+                @if (isSubmitting)
+                {
+                    <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                    <span>Processing...</span>
+                }
+                else
+                {
+                    <span>View My Results</span>
+                }
+            </MudButton>
+
+            @if (!allQuestionsAnswered)
+            {
+                <MudText Typo="Typo.caption" Class="mt-2 text-center" Color="Color.Warning">
+                    Please answer all @questions.Count questions to continue
+                </MudText>
+            }
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter]
+    public Guid SessionId { get; set; }
+
+    private List<Question> questions = new();
+    private List<AssessmentAnswer> answers = new();
+    private Architypes.Core.Entities.Assessment? assessment;
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+
+    private int answeredCount => answers.Count(a => a.Rating > 0);
+    private double progressPercentage => questions.Count > 0 ? (answeredCount * 100.0 / questions.Count) : 0;
+    private bool allQuestionsAnswered => answeredCount == questions.Count;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Load assessment
+            assessment = await AssessmentService.GetAssessmentBySessionIdAsync(SessionId);
+
+            if (assessment == null)
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            // Check if already completed
+            if (assessment.IsCompleted && assessment.Result != null)
+            {
+                Navigation.NavigateTo($"/results/{SessionId}");
+                return;
+            }
+
+            // Load questions
+            questions = await AssessmentService.GetAllQuestionsAsync();
+
+            // Initialize answers
+            answers = assessment.Answers.ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading assessment: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnRatingChanged(int questionId, int rating)
+    {
+        try
+        {
+            if (assessment == null) return;
+
+            await AssessmentService.SaveAnswerAsync(assessment.Id, questionId, rating);
+
+            // Update local state
+            var existingAnswer = answers.FirstOrDefault(a => a.QuestionId == questionId);
+            if (existingAnswer != null)
+            {
+                existingAnswer.Rating = rating;
+            }
+            else
+            {
+                answers.Add(new AssessmentAnswer
+                {
+                    AssessmentId = assessment.Id,
+                    QuestionId = questionId,
+                    Rating = rating
+                });
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving answer: {ex.Message}");
+        }
+    }
+
+    private async Task SubmitAssessment()
+    {
+        if (!allQuestionsAnswered || assessment == null) return;
+
+        isSubmitting = true;
+        try
+        {
+            await AssessmentService.CalculateResultsAsync(assessment.Id);
+            Navigation.NavigateTo($"/results/{SessionId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calculating results: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

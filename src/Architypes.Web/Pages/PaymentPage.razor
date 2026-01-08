@@ -1,0 +1,80 @@
+@page "/payment/{SessionId:guid}"
+@inject IPaymentService PaymentService
+@inject NavigationManager Navigation
+
+<PageTitle>Secure Payment</PageTitle>
+
+@if (isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10 text-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.h6" Class="mt-4">Redirecting to secure payment...</MudText>
+        <MudText Typo="Typo.body2" Class="mt-2" Style="color: #666;">
+            Please wait while we redirect you to PayFast
+        </MudText>
+    </MudContainer>
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10">
+        <MudAlert Severity="Severity.Error">
+            @errorMessage
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="@(() => Navigation.NavigateTo($"/results/{SessionId}"))">
+            Return to Results
+        </MudButton>
+    </MudContainer>
+}
+
+@code {
+    [Parameter]
+    public Guid SessionId { get; set; }
+
+    private bool isLoading = true;
+    private string errorMessage = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var baseUrl = Navigation.BaseUri.TrimEnd('/');
+                var returnUrl = $"{baseUrl}/payment/return/{SessionId}";
+                var cancelUrl = $"{baseUrl}/payment/cancel/{SessionId}";
+                var notifyUrl = $"{baseUrl}/payment/notify";
+
+                var paymentForm = await PaymentService.GeneratePaymentFormAsync(
+                    SessionId,
+                    returnUrl,
+                    cancelUrl,
+                    notifyUrl
+                );
+
+                // Inject the form HTML and auto-submit
+                await InjectAndSubmitForm(paymentForm);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Payment initialization failed: {ex.Message}";
+                isLoading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task InjectAndSubmitForm(string formHtml)
+    {
+        // Create a div to hold the form
+        var jsCode = $@"
+            const div = document.createElement('div');
+            div.innerHTML = {System.Text.Json.JsonSerializer.Serialize(formHtml)};
+            document.body.appendChild(div);
+        ";
+
+        await JSRuntime.InvokeVoidAsync("eval", jsCode);
+    }
+
+    [Inject]
+    private IJSRuntime JSRuntime { get; set; } = null!;
+}

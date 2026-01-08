@@ -1,0 +1,89 @@
+@page "/"
+@inject NavigationManager Navigation
+@inject IAssessmentService AssessmentService
+@inject IJSRuntime JS
+
+<PageTitle>Discover Your True Archetype</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-10">
+    <MudPaper Elevation="3" Class="pa-8" Style="text-align: center;">
+        <MudText Typo="Typo.h2" Color="Color.Primary" GutterBottom="true">
+            Discover Your True Archetype
+        </MudText>
+
+        <MudText Typo="Typo.h5" Class="mt-4 mb-6" Style="color: #666;">
+            Unlock the hidden patterns that shape who you are
+        </MudText>
+
+        <MudText Typo="Typo.body1" Class="mb-8" Style="line-height: 1.8;">
+            We all carry ancient archetypes—timeless patterns of being that influence how we lead, create, love, and live.
+            This assessment reveals your dominant archetypes and shows you how to work with your natural strengths
+            and navigate your shadows.
+        </MudText>
+
+        <MudDivider Class="my-6" />
+
+        <MudText Typo="Typo.h6" Class="mb-4">
+            Choose your version to begin:
+        </MudText>
+
+        <MudGrid Justify="Justify.Center" Spacing="4">
+            <MudItem xs="12" sm="6">
+                <MudCard Elevation="2" Class="pa-6" Style="cursor: pointer; transition: all 0.3s;"
+                         @onclick="() => StartAssessment(Gender.Male)">
+                    <MudCardContent>
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+                        <MudText Typo="Typo.h5" GutterBottom="true">Male Version</MudText>
+                        <MudText Typo="Typo.body2" Style="color: #666;">
+                            The King, The Warrior, The Magician, and more
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <MudCard Elevation="2" Class="pa-6" Style="cursor: pointer; transition: all 0.3s;"
+                         @onclick="() => StartAssessment(Gender.Female)">
+                    <MudCardContent>
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                        <MudText Typo="Typo.h5" GutterBottom="true">Female Version</MudText>
+                        <MudText Typo="Typo.body2" Style="color: #666;">
+                            The Queen, The Huntress, The Mystic, and more
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.caption" Class="mt-8" Style="color: #999;">
+            36 questions • 5-10 minutes • Personalized results
+        </MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private async Task StartAssessment(Gender gender)
+    {
+        // Get or create session ID
+        var sessionId = await GetOrCreateSessionId();
+
+        // Create assessment
+        var assessment = await AssessmentService.CreateAssessmentAsync(sessionId, gender);
+
+        // Navigate to assessment page
+        Navigation.NavigateTo($"/assessment/{sessionId}");
+    }
+
+    private async Task<Guid> GetOrCreateSessionId()
+    {
+        var sessionIdStr = await JS.InvokeAsync<string>("sessionStorage.getItem", "assessmentSessionId");
+
+        if (string.IsNullOrEmpty(sessionIdStr) || !Guid.TryParse(sessionIdStr, out var sessionId))
+        {
+            sessionId = Guid.NewGuid();
+            await JS.InvokeVoidAsync("sessionStorage.setItem", "assessmentSessionId", sessionId.ToString());
+        }
+
+        return sessionId;
+    }
+}
